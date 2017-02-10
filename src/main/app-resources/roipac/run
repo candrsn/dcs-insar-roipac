@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -x
 # source the ciop functions (e.g. ciop-log)
 source ${ciop_job_include}
 
@@ -32,112 +32,151 @@ function cleanExit ()
 
 trap cleanExit EXIT
 
-# create a shorter TMPDIR name for some ROI_PAC scripts/binaires
-UUIDTMP="/tmp/`uuidgen`"
-#ln -s $TMPDIR $UUIDTMP
-mkdir ${UUIDTMP}
-export TMPDIR=$UUIDTMP
+function set_env() {
 
-ciop-log "DEBUG" "working in tmp dir [${TMPDIR}]"
+  # create a shorter TMPDIR name for some ROI_PAC scripts/binaires
+  UUIDTMP="/tmp/$( uuidgen )"
 
-# prepare ROI_PAC environment variables
-export INT_BIN=/usr/bin/
-export INT_SCR=/usr/share/roi_pac
-export PATH=${INT_BIN}:${INT_SCR}:${PATH}
+  mkdir ${UUIDTMP}
+  export TMPDIR=${UUIDTMP}
 
-export SAR_ENV_ORB=$TMPDIR/aux
-export VOR_DIR=$TMPDIR/vor
-export INS_DIR=$SAR_ENV_ORB
+  ciop-log "DEBUG" "working in tmp dir [${TMPDIR}]"
 
-cat > $TMPDIR/input
+  # prepare ROI_PAC environment variables
+  export INT_BIN=/usr/bin/
+  export INT_SCR=/usr/share/roi_pac
+  export PATH=${INT_BIN}:${INT_SCR}:${PATH}
 
-# retrieve the aux files
-mkdir -p $TMPDIR/aux
-for input in `cat $TMPDIR/input | grep 'aux='`
-do
+  export SAR_ENV_ORB=${TMPDIR}/aux
+  export VOR_DIR=${TMPDIR}/vor
+  export INS_DIR=${SAR_ENV_ORB}
+
+  mkdir -p ${TMPDIR}/aux
+  mkdir -p $TMPDIR/vor
+  mkdir -p $TMPDIR/workdir/dem
+
+}
+
+function get_aux() {
+
+  # retrieve the aux files
+
+  for input in $( cat ${TMPDIR}/input | grep 'aux=' )
+  do
     ciop-log "DEBUG" "retrieving aux file ${input#aux=}"
-    echo ${input#aux=} | ciop-copy -O $TMPDIR/aux - 2> /dev/null
-    [ $? -ne 0 ] && exit $ERR_AUX
-done
 
-# retrieve the orbit data
-mkdir -p $TMPDIR/vor
-for input in `cat $TMPDIR/input | grep 'vor='`
-do
+    ref=$( echo ${input#aux=} )
+    opensearch-client ${ref} enclosure | ciop-copy -O ${TMPDIR}/aux - # 2> /dev/null
+    [ $? -ne 0 ] && exit ${ERR_AUX}
+
+  done
+
+}
+
+function get_orbit() {
+
+  # retrieve the orbit data 
+  for input in $( cat ${TMPDIR}/input | grep 'vor=' )
+  do
     ciop-log "DEBUG" "retrieving orbit file ${input#aux=}"
-    echo ${input#vor=} | ciop-copy -O $TMPDIR/vor - 2> /dev/null
-    [ $? -ne 0 ] && exit $ERR_VOR
-done
 
-# retrieve the DEM
-mkdir -p $TMPDIR/workdir/dem
-demRes="$( cat $TMPDIR/input | grep 'node_dem')" 
-wps_result="$( ciop-browseresults -R $demRes | tr -d '\r')" #just a parser of result.xml and metalink
-ciop-log "DEBUG" "dem wps results is ${wps_result}"
+    ref=$( echo ${input#vor=} )
+    opensearch-client ${ref} enclosure | ciop-copy -O ${TMPDIR}/vor - #2> /dev/null
+    [ $? -ne 0 ] && exit ${ERR_VOR}
 
-# extract the result URL
-curl -L -o $TMPDIR/workdir/dem/dem.tgz "${wps_result}" 2> /dev/null
-tar xzf $TMPDIR/workdir/dem/dem.tgz -C $TMPDIR/workdir/dem/
+  done
 
-dem="`find $TMPDIR/workdir/dem -name "*.dem"`"
+}
 
-# the path to the ROI_PAC proc file
-roipac_proc=$TMPDIR/workdir/roi_pac.proc
+function get_dem() {
 
-# get all SAR products
+  # retrieve the DEM
+  demRes="$( cat ${TMPDIR}/input | grep 'node_dem')"
+  wps_result="$( ciop-browseresults -R ${demRes} | tr -d '\r')" #just a parser of result.xml and metalink
+  ciop-log "DEBUG" "dem wps results is ${wps_result}"
 
-for input in `cat $TMPDIR/input | grep 'sar='`
-do
-    sar_url=`echo $input | sed "s/^sar=//"`
+  # extract the result URL
+  curl -L -o ${TMPDIR}/workdir/dem/dem.tgz "${wps_result}" 2> /dev/null
+  tar xzf ${TMPDIR}/workdir/dem/dem.tgz -C ${TMPDIR}/workdir/dem/
+
+  export dem="$( find $TMPDIR/workdir/dem -name "*.dem")"
+
+}
+
+
+function main() {
+
+  ciop-log "INFO" "Setting the environment for ROI_PAC"
+  
+  cat > ${TMPDIR}/input
+
+  get_aux || exit $?
+
+  get_orbit || exit $?
+
+  get_dem || exit $? 
+
+  get_data || exit $?
+
+  # the path to the ROI_PAC proc file
+  roipac_proc=$TMPDIR/workdir/roi_pac.proc
+
+  # get all SAR products
+
+  for input in $( cat ${TMPDIR}/input | grep 'sar=' )
+  do
+    sar_url=$( echo $input | sed "s/^sar=//")
 
     # get the date in format YYMMDD
-    sar_date=`opensearch-client $sar_url startdate | cut -c 3-10 | tr -d "-"`
-    sar_date_short=`echo $sar_date | cut -c 1-4`
+    sar_date=$( opensearch-client ${sar_url} startdate | cut -c 3-10 | tr -d "-")
+    sar_date_short=$( echo ${sar_date} | cut -c 1-4 )
 
     ciop-log "DEBUG" "SAR input ${sar_url}"
-    ciop-log "INFO" "SAR date: $sar_date and $sar_date_short"
+    ciop-log "INFO" "SAR date: ${sar_date} and ${sar_date_short}"
 
     # get the dataset identifier
-    sar_identifier=`opensearch-client $sar_url identifier`
-    ciop-log "INFO" "SAR identifier: $sar_identifier"
+    sar_identifier=$( opensearch-client ${sar_url} identifier )
+    ciop-log "INFO" "SAR identifier: ${sar_identifier}"
 
-    sar_folder=$TMPDIR/workdir/$sar_date
-    mkdir -p $sar_folder
+    sar_folder=${TMPDIR}/workdir/${sar_date}
+    mkdir -p ${sar_folder}
 
     # get ASAR products
-    sar_url=`opensearch-client $sar_url enclosure`
-    sar="`ciop-copy -o $sar_folder $sar_url`"
+    sar_url=$( opensearch-client ${sar_url} enclosure )
+    sar="$( ciop-copy -o ${sar_folder} ${sar_url} )"
 
-    cd $sar_folder
-    ciop-log "DEBUG" "make_raw_envi.pl $sar_identifier DOR $sar_date"
-    make_raw_envi.pl $sar_identifier DOR $sar_date 1>&2
+    #TODO 
+    # add check on $sar
 
-    if [ ! -e "$roipac_proc" ]
-    then
-        echo "SarDir1=$sar_date" > $roipac_proc
-        intdir="$sar_date"
-        sar1="$sar_date"
+    cd ${sar_folder}
+    ciop-log "DEBUG" "make_raw_envi.pl ${sar_identifier} DOR ${sar_date}"
+    make_raw_envi.pl ${sar_identifier} DOR ${sar_date} 1>&2
+
+    [ ! -e "${roipac_proc}" ] && {
+        echo "SarDir1=${sar_date}" > ${roipac_proc}
+        intdir="${sar_date}"
+        sar1="${sar_date}"
         geodir="geo_${sar_date_short}"
-    else
-        echo "SarDir2=$sar_date" >> $roipac_proc
+    } || {
+        echo "SarDir2=${sar_date}" >> ${roipac_proc}
         intdir=${intdir}-${sar_date}
-        sar2="$sar_date"
+        sar2="{sar_date}"
         base=${sar1}_${sar2}
         geodir=${geodir}-${sar_date_short}
-    fi
-done
+    }
+  done
 
-ciop-log "INFO" "Conversion of SAR pair to RAW completed"
+  ciop-log "INFO" "Conversion of SAR pair to RAW completed"
 
-ciop-log "INFO" "Generation of ROI_PAC proc file"
+  ciop-log "INFO" "Generation of ROI_PAC proc file"
 
-# generate ROI_PAC proc file
-cat >> $roipac_proc << EOF
+  # generate ROI_PAC proc file
+  cat >> ${roipac_proc} << EOF
 IntDir=int_${intdir}
 SimDir=sim_3asec
 # new sim for this track at 4rlks
 do_sim=yes
-GeoDir=$geodir
+GeoDir=${geodir}
 
 # standard pixel ratio for Envisat beam I2
 pixel_ratio=5
@@ -157,7 +196,7 @@ flattening=orbit
 concurrent_roi=yes
 
 # little-endian DEM
-DEM=$dem
+DEM=${dem}
 MODEL=NULL
 cleanup=no
 
@@ -167,77 +206,84 @@ unw_method=old
 
 EOF
 
-ciop-log "INFO" "Invoking ROI_PAC process_2pass"
+  ciop-log "INFO" "Invoking ROI_PAC process_2pass"
 
-cd $TMPDIR/workdir
-process_2pass.pl $roipac_proc 1>&2
-[ $? -ne 0 ] && exit $ERR_PROCESS2PASS
+  cd ${TMPDIR}/workdir
+  process_2pass.pl ${roipac_proc} 1>&2
 
-cd int_${intdir}
+  [ $? -ne 0 ] && exit ${ERR_PROCESS2PASS}
 
-ciop-log "INFO" "Geocoding the wrapped interferogram"
-h=$(cat filt_${intdir}-sim_HDR_4rlks.int.rsc | grep FILE_LENGTH | tr -s " " | cut -d " " -f 2)
-w=$(cat filt_${intdir}-sim_HDR_4rlks.int.rsc | grep WIDTH | tr -s " " | cut -d " " -f 2)
-cpx2rmg  filt_${intdir}-sim_HDR_4rlks.int  filt_${intdir}-sim_HDR_4rlks.int.hgt ${w} ${h}
-cp filt_${intdir}-sim_HDR_4rlks.int.rsc filt_${intdir}-sim_HDR_4rlks.int.hgt.rsc
-geocode.pl geomap_4rlks.trans filt_${intdir}-sim_HDR_4rlks.int.hgt geo_${intdir}.int
+  cd int_${intdir}
 
-ciop-log "INFO" "Creating geotif files for interferogram phase and magnitude"
-/usr/bin/roipac2grdfile -t real -i geo_${intdir}.int -r geo_${intdir}.int.rsc -o geo_${intdir}.int.nc
-/usr/bin/roipac2grdfile -t real -i geo_${intdir}.unw -r geo_${intdir}.unw.rsc -o geo_${intdir}.unw.nc
+  ciop-log "INFO" "Geocoding the wrapped interferogram"
+  h=$(cat filt_${intdir}-sim_HDR_4rlks.int.rsc | grep FILE_LENGTH | tr -s " " | cut -d " " -f 2)
+  w=$(cat filt_${intdir}-sim_HDR_4rlks.int.rsc | grep WIDTH | tr -s " " | cut -d " " -f 2)
 
-gdal_translate NETCDF:"geo_${intdir}.int.nc":phase geo_${intdir}.int.phase.tif
-gdal_translate NETCDF:"geo_${intdir}.int.nc":magnitude geo_${intdir}.int.magnitude.tif
-gdal_translate NETCDF:"geo_${intdir}.unw.nc":phase geo_${intdir}.unw.phase.tif
+  cpx2rmg  filt_${intdir}-sim_HDR_4rlks.int  filt_${intdir}-sim_HDR_4rlks.int.hgt ${w} ${h}
+  cp filt_${intdir}-sim_HDR_4rlks.int.rsc filt_${intdir}-sim_HDR_4rlks.int.hgt.rsc
+  geocode.pl geomap_4rlks.trans filt_${intdir}-sim_HDR_4rlks.int.hgt geo_${intdir}.int
 
-# create quicklooks
-# rescale
-gdal_translate -scale -10 10 0 255 -ot Byte -of GTiff  geo_${intdir}.unw.phase.tif geo_${intdir}.unw.phase.temp.tif
-gdal_translate -scale -10 10 0 255 -ot Byte -of PNG  geo_${intdir}.unw.phase.tif geo_${intdir}.unw.phase.png
-listgeo -tfw geo_${intdir}.unw.phase.tif
-mv geo_${intdir}.unw.phase.tfw geo_${intdir}.unw.phase.pngw
+  ciop-log "INFO" "Creating geotif files for interferogram phase and magnitude"
+  /usr/bin/roipac2grdfile -t real -i geo_${intdir}.int -r geo_${intdir}.int.rsc -o geo_${intdir}.int.nc
+  /usr/bin/roipac2grdfile -t real -i geo_${intdir}.unw -r geo_${intdir}.unw.rsc -o geo_${intdir}.unw.nc
 
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/geo_${intdir}.unw.phase.png
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/geo_${intdir}.unw.phase.pngw
+  gdal_translate NETCDF:"geo_${intdir}.int.nc":phase geo_${intdir}.int.phase.tif
+  gdal_translate NETCDF:"geo_${intdir}.int.nc":magnitude geo_${intdir}.int.magnitude.tif
+  gdal_translate NETCDF:"geo_${intdir}.unw.nc":phase geo_${intdir}.unw.phase.tif
 
-ciop-log "INFO" "Publishing results"
-ciop-publish -m $TMPDIR/workdir/*.proc
+  # create quicklooks
+  # rescale
+  gdal_translate -scale -10 10 0 255 -ot Byte -of GTiff  geo_${intdir}.unw.phase.tif geo_${intdir}.unw.phase.temp.tif
+  gdal_translate -scale -10 10 0 255 -ot Byte -of PNG  geo_${intdir}.unw.phase.tif geo_${intdir}.unw.phase.png
+  listgeo -tfw geo_${intdir}.unw.phase.tif
+  mv geo_${intdir}.unw.phase.tfw geo_${intdir}.unw.phase.pngw
 
-ciop-log "INFO" "Publishing baseline file"
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/*_baseline.rsc
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/geo_${intdir}.unw.phase.png
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/geo_${intdir}.unw.phase.pngw
 
-ciop-log "INFO" "Publishing multi-look interferograms"
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/${intdir}-sim*.int
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/${intdir}-sim*.int.rsc
+  ciop-log "INFO" "Publishing results"
+  ciop-publish -m ${TMPDIR}/workdir/*.proc
 
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/filt*${intdir}-sim*.int
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/filt*${intdir}-sim*.int.rsc
+  ciop-log "INFO" "Publishing baseline file"
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/*_baseline.rsc
 
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/filt*${intdir}-sim*.unw
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/filt*${intdir}-sim*.unw.rsc
+  ciop-log "INFO" "Publishing multi-look interferograms"
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/${intdir}-sim*.int
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/${intdir}-sim*.int.rsc
 
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/geo_${intdir}.unw
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/geo_${intdir}.unw.rsc
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/filt*${intdir}-sim*.int
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/filt*${intdir}-sim*.int.rsc
 
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/log
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/log1
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/filt*${intdir}-sim*.unw
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/filt*${intdir}-sim*.unw.rsc
 
-for file in `find . -name "${intdir}*.cor"`
-do
-    ciop-publish -m $TMPDIR/workdir/int_${intdir}/$file
-    ciop-publish -m $TMPDIR/workdir/int_${intdir}/$file.rsc
-done
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/geo_${intdir}.unw
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/geo_${intdir}.unw.rsc
 
-ciop-log "INFO" "Publishing tif files"
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/geo_${intdir}.int.phase.tif
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/geo_${intdir}.int.magnitude.tif
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/geo_${intdir}.unw.phase.tif
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/log
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/log1
 
-ciop-log "INFO" "Publishing full resolution interferogram"
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/$intdir.int
-ciop-publish -m $TMPDIR/workdir/int_${intdir}/$intdir.int.rsc
+  for file in $( find . -name "${intdir}*.cor" )
+  do
+    ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/${file}
+    ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/${file}.rsc
+  done
 
+  ciop-log "INFO" "Publishing tif files"
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/geo_${intdir}.int.phase.tif
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/geo_${intdir}.int.magnitude.tif
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/geo_${intdir}.unw.phase.tif
 
-#rm -fr $UUIDTMP
+  ciop-log "INFO" "Publishing full resolution interferogram"
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/$intdir.int
+  ciop-publish -m ${TMPDIR}/workdir/int_${intdir}/$intdir.int.rsc
 
-ciop-log "INFO" "That's all folks"
+  cleanup
+  ciop-log "INFO" "That's all folks" 
+}
+
+function cleanup() {
+  rm -fr $UUIDTMP
+}
+
+main || exit $?
