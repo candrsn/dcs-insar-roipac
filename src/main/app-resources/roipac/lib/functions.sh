@@ -7,6 +7,7 @@ ERR_VOR=6
 ERR_INVALIDFORMAT=2
 ERR_NOIDENTIFIER=5
 ERR_NODEM=7
+ERR_PROCESS2PASS=10
 
 # add a trap to exit gracefully
 function cleanExit ()
@@ -20,6 +21,7 @@ function cleanExit ()
         $ERR_INVALIDFORMAT) msg="Invalid format must be roi_pac or gamma";;
         $ERR_NOIDENTIFIER) msg="Could not retrieve the dataset identifier";;
         $ERR_NODEM) msg="DEM not generated";;
+	$ERR_PROCESS2PASS) msg="ROI_PAC failed to process pair";;
         *) msg="Unknown error";;
     esac
 
@@ -44,13 +46,16 @@ function set_env() {
   export INT_SCR=/usr/share/roi_pac
   export PATH=${INT_BIN}:${INT_SCR}:${PATH}
 
+  mkdir -p ${TMPDIR}/aux
+  mkdir -p ${TMPDIR}/vor
+  mkdir -p ${TMPDIR}/workdir/dem
+
   export SAR_ENV_ORB=${TMPDIR}/aux
   export VOR_DIR=${TMPDIR}/vor
   export INS_DIR=${SAR_ENV_ORB}
 
-  mkdir -p ${TMPDIR}/aux
-  mkdir -p $TMPDIR/vor
-  mkdir -p $TMPDIR/workdir/dem
+  # the path to the ROI_PAC proc file
+  export roipac_proc=$TMPDIR/workdir/roi_pac.proc
 
 }
 
@@ -63,8 +68,11 @@ function get_aux() {
     ciop-log "DEBUG" "retrieving aux file ${input#aux=}"
 
     ref=$( echo ${input#aux=} )
-    opensearch-client ${ref} enclosure | ciop-copy -O ${TMPDIR}/aux - # 2> /dev/null
-    [ $? -ne 0 ] && exit ${ERR_AUX}
+    enclosure="$( opensearch-client ${ref} enclosure )"
+    [ -z "${enclosure}" ] && return ${ERR_AUX}
+
+    ciop-copy -O ${TMPDIR}/aux ${enclosure} # 2> /dev/null
+    [ $? -ne 0 ] && return ${ERR_AUX}
 
   done
 
@@ -75,11 +83,14 @@ function get_orbit() {
   # retrieve the orbit data 
   for input in $( cat ${TMPDIR}/input | grep 'vor=' )
   do
-    ciop-log "DEBUG" "retrieving orbit file ${input#aux=}"
+    ciop-log "DEBUG" "retrieving orbit file ${input#vor=}"
 
     ref=$( echo ${input#vor=} )
-    opensearch-client ${ref} enclosure | ciop-copy -O ${TMPDIR}/vor - #2> /dev/null
-    [ $? -ne 0 ] && exit ${ERR_VOR}
+    enclosure="$( opensearch-client ${ref} enclosure )"
+    [ -z "${enclosure}" ] && return ${ERR_VOR}
+
+    ciop-copy -O ${TMPDIR}/vor ${enclosure} # 2> /dev/null
+    [ $? -ne 0 ] && return ${ERR_VOR}
 
   done
 
@@ -94,9 +105,14 @@ function get_dem() {
 
   # extract the result URL
   curl -L -o ${TMPDIR}/workdir/dem/dem.tgz "${wps_result}" 2> /dev/null
-  tar xzf ${TMPDIR}/workdir/dem/dem.tgz -C ${TMPDIR}/workdir/dem/
+  [ -e ${TMPDIR}/workdir/dem/dem.tgz ] && return ${ERR_NODEM}
 
-  export dem="$( find $TMPDIR/workdir/dem -name "*.dem")"
+  tar xzf ${TMPDIR}/workdir/dem/dem.tgz -C ${TMPDIR}/workdir/dem/
+  
+  dem="$( find $TMPDIR/workdir/dem -name "*.dem")"
+  [ -e ${dem} ] && return ${ERR_NODEM}
+
+  export dem="${dem}"
 
 }
 
@@ -104,8 +120,10 @@ function get_dem() {
 function main() {
 
   ciop-log "INFO" "Setting the environment for ROI_PAC"
-  
+ 
   cat > ${TMPDIR}/input
+
+  set_env
 
   get_aux || exit $?
 
@@ -113,26 +131,22 @@ function main() {
 
   get_dem || exit $? 
 
-  get_data || exit $?
-
-  # the path to the ROI_PAC proc file
-  roipac_proc=$TMPDIR/workdir/roi_pac.proc
-
   # get all SAR products
-
   for input in $( cat ${TMPDIR}/input | grep 'sar=' )
   do
     sar_url=$( echo $input | sed "s/^sar=//")
 
     # get the date in format YYMMDD
     sar_date=$( opensearch-client ${sar_url} startdate | cut -c 3-10 | tr -d "-")
+    [ -z "${sar_date}" ] && return ${ERR_SAR_DATE}
     sar_date_short=$( echo ${sar_date} | cut -c 1-4 )
 
-    ciop-log "DEBUG" "SAR input ${sar_url}"
     ciop-log "INFO" "SAR date: ${sar_date} and ${sar_date_short}"
 
     # get the dataset identifier
     sar_identifier=$( opensearch-client ${sar_url} identifier )
+    [ -z "${sar_identifier}" ] && return ${ERR_SAR_IDENTIFIER}
+ 
     ciop-log "INFO" "SAR identifier: ${sar_identifier}"
 
     sar_folder=${TMPDIR}/workdir/${sar_date}
@@ -140,14 +154,16 @@ function main() {
 
     # get ASAR products
     sar_url=$( opensearch-client ${sar_url} enclosure )
-    sar="$( ciop-copy -o ${sar_folder} ${sar_url} )"
+    [ -z "${sar_url}" ] && return ${ERR_SAR_ENCLOSURE}
 
-    #TODO 
-    # add check on $sar
+    sar="$( ciop-copy -o ${sar_folder} ${sar_url} )"
+    [ ! -e "${sar}" ] && return ${ERR_SAR}
 
     cd ${sar_folder}
     ciop-log "DEBUG" "make_raw_envi.pl ${sar_identifier} DOR ${sar_date}"
     make_raw_envi.pl ${sar_identifier} DOR ${sar_date} 1>&2
+    [ $? != 0 ] && return ${ERR_MAKE_RAW} 
+
 
     [ ! -e "${roipac_proc}" ] && {
         echo "SarDir1=${sar_date}" > ${roipac_proc}
@@ -207,14 +223,13 @@ EOF
 
   cd ${TMPDIR}/workdir
   process_2pass.pl ${roipac_proc} 1>&2
-
   [ $? -ne 0 ] && exit ${ERR_PROCESS2PASS}
 
   cd int_${intdir}
 
   ciop-log "INFO" "Geocoding the wrapped interferogram"
-  h=$(cat filt_${intdir}-sim_HDR_4rlks.int.rsc | grep FILE_LENGTH | tr -s " " | cut -d " " -f 2)
-  w=$(cat filt_${intdir}-sim_HDR_4rlks.int.rsc | grep WIDTH | tr -s " " | cut -d " " -f 2)
+  h=$( cat filt_${intdir}-sim_HDR_4rlks.int.rsc | grep FILE_LENGTH | tr -s " " | cut -d " " -f 2 )
+  w=$( cat filt_${intdir}-sim_HDR_4rlks.int.rsc | grep WIDTH | tr -s " " | cut -d " " -f 2 )
 
   cpx2rmg  filt_${intdir}-sim_HDR_4rlks.int  filt_${intdir}-sim_HDR_4rlks.int.hgt ${w} ${h}
   cp filt_${intdir}-sim_HDR_4rlks.int.rsc filt_${intdir}-sim_HDR_4rlks.int.hgt.rsc
