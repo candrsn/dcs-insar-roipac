@@ -1,0 +1,33 @@
+INFO Getting a catalogue reference to ASA_CON_AX
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20120626_160512_20100317_120410_20141231_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20120626_160512_20100317_120410_20141231_000000
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20101222_141422_20100317_120410_20141231_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20101222_141422_20100317_120410_20141231_000000
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20091217_101713_20070204_165113_20101231_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20091217_101713_20070204_165113_20101231_000000
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20100608_125449_20100317_120410_20101231_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20100608_125449_20100317_120410_20101231_000000
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20120626_155037_20070204_165113_20101231_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_CON_AXVIEC20120626_155037_20070204_165113_20101231_000000
+INFO Getting a catalogue reference to ASA_INS_AX
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_INS_AXVIEC20020123_081841_20020101_000000_20200101_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_INS_AXVIEC20020123_081841_20020101_000000_20200101_000000
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_INS_AXVIEC20091217_114637_20090428_100000_20101231_235959
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_INS_AXVIEC20091217_114637_20090428_100000_20101231_235959
+INFO Getting a catalogue reference to ASA_XCA_AX
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCA_AXVIEC20100608_123419_20100317_120410_20110101_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCA_AXVIEC20100608_123419_20100317_120410_20110101_000000
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCA_AXVIEC20100315_123052_20090501_000000_20110101_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCA_AXVIEC20100315_123052_20090501_000000_20110101_000000
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCA_AXVIEC20100302_155508_20090501_000000_20101231_235959
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCA_AXVIEC20100302_155508_20090501_000000_20101231_235959
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCA_AXVIEC20091217_114112_20080801_000000_20101231_235959
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCA_AXVIEC20091217_114112_20080801_000000_20101231_235959
+INFO Getting a catalogue reference to ASA_XCH_AX
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCH_AXVIEC20101222_143057_20020301_000000_20141231_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCH_AXVIEC20101222_143057_20020301_000000_20141231_000000
+INFO the url is https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCH_AXVIEC20091217_113006_20020301_000000_20101231_000000
+aux=https://catalog.terradue.com//envisat/search?format=atom&uid=ASA_XCH_AXVIEC20091217_113006_20020301_000000_20101231_000000
+INFO Getting a reference to DOR_VOR_AX
+vor=https://catalog.terradue.com//envisat/search?format=atom&uid=DOR_VOR_AXVF-P20100423_084900_20100327_215526_20100329_002326
+sar=https://catalog.terradue.com/envisat/search?uid=ASA_IM__0CNPDE20100328_175019_000000162088_00084_42222_9504.N1
