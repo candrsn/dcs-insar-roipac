@@ -8,6 +8,11 @@ ERR_INVALIDFORMAT=2
 ERR_NOIDENTIFIER=5
 ERR_NODEM=7
 ERR_PROCESS2PASS=10
+ERR_SAR_DATE=15
+ERR_SAR_IDENTIFIER=20
+ERR_SAR_ENCLOSURE=25
+ERR_SAR=30
+ERR_MAKE_RAW=35
 
 # add a trap to exit gracefully
 function cleanExit ()
@@ -21,7 +26,12 @@ function cleanExit ()
         $ERR_INVALIDFORMAT) msg="Invalid format must be roi_pac or gamma";;
         $ERR_NOIDENTIFIER) msg="Could not retrieve the dataset identifier";;
         $ERR_NODEM) msg="DEM not generated";;
-	$ERR_PROCESS2PASS) msg="ROI_PAC failed to process pair";;
+        $ERR_SAR_DATE) msg="Could not get SAR date";;
+        $ERR_SAR_IDENTIFIER) msg="Could not get SAR identifier";;
+        $ERR_SAR_ENCLOSURE) msg="Could not get SAR enclosure";;
+        $ERR_SAR) msg="Could not retrieve SAR product";;
+	$ERR_MAKE_RAW) msg="Failed to convert SAR to ROI_PAC format (make_raw)";;
+        $ERR_PROCESS2PASS) msg="ROI_PAC failed to process pair";;
         *) msg="Unknown error";;
     esac
 
