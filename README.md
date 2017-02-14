@@ -18,7 +18,6 @@ This repository contains the application files and scripts to process a pair (Ma
 
 To run this application you will need a Developer Cloud Sandbox, that can be either requested from:
 * ESA [Geohazards Exploitation Platform](https://geohazards-tep.eo.esa.int) for GEP early adopters;
-* ESA [Research & Service Support Portal](http://eogrid.esrin.esa.int/cloudtoolbox/) for ESA G-POD related projects and ESA registered user accounts
 * From [Terradue's Portal](http://www.terradue.com/partners), provided user registration approval.
 
 A Developer Cloud Sandbox provides Earth Sciences data access services, and helper tools for a user to implement, test and validate a scalable data processing application. It offers a dedicated virtual machine and a Cloud Computing environment.
@@ -28,7 +27,19 @@ Used in Cluster mode (a set of master and slave nodes), it supports the deployme
 
 ### <a name="installation"></a>Installation
 
-#### Pre-requisites
+##### Using the releases
+
+Log on the developer cloud sandbox. 
+
+Install the application by running these commands in a shell:
+
+```bash
+sudo yum install -y dcs-insar-roipac --enablerepo=geohazards-tep
+```
+
+#### Using the development version
+
+Install the pre-requisites.
 
 ROI-PAC is a software package available through the Terradue Cloud Platform software repository.
 
@@ -38,25 +49,14 @@ ROI-PAC is a software package available through the Terradue Cloud Platform soft
 sudo yum install roi_pac.x86_64 roi_pac-grdfile.x86_64
 ```
 
-##### Using the releases
-
-Log on the developer cloud sandbox. Download the RPM package from https://github.com/geohazards-tep/InSAR-ROI_PAC/releases.
-Install the downloaded package by running these commands in a shell:
-
-```bash
-sudo yum -y install InSAR-ROI_PAC-<version>-ciop.x86_64.rpm
-```
-
-#### Using the development version
-
 Log on the developer sandbox and run these commands in a shell:
 
 ```bash
 cd
-git clone https://github.com/Terradue/InSAR-ROI_PAC.git
-cd InSAR-ROI_PAC
+git clone https://github.com/geohazards-tep/dcs-insar-roipac.git
+cd dcs-insar-roipac
 git checkout develop
-mvn install
+mvn clean install
 ```
 
 ### <a name="submit"></a>Submitting the workflow
@@ -68,8 +68,8 @@ ciop-run
 ```
 Or invoke the Web Processing Service via the Sandbox dashboard or the [Geohazards Thematic Exploitation platform](https://geohazards-tep.eo.esa.int) providing a master and a slave products' URL, e.g.:
 
-* http://catalogue.terradue.int/catalogue/search/ASA_IM__0P/ASA_IM__0CNPDE20090412_092426_000000162078_00079_37207_1556.N1/rdf (master)
-* http://catalogue.terradue.int/catalogue/search/ASA_IM__0P/ASA_IM__0CNPAM20080427_092430_000000172068_00079_32197_3368.N1/rdf (slave)
+* https://catalog.terradue.com/envisat/search?uid=ASA_IM__0CNPDE20100502_175016_000000172089_00084_42723_0354.N1 (master)
+* https://catalog.terradue.com/envisat/search?uid=ASA_IM__0CNPDE20100328_175019_000000162088_00084_42222_9504.N1 (slave)
 
 To learn more and find information go to
 
@@ -87,10 +87,10 @@ To learn more and find information go to
 
 ### <a name="questions"></a>Questions, bugs, and suggestions
 
-Please file any bugs or questions as [issues](https://github.com/geohazards-tep/InSAR-ROI_PAC/issues/new) or send in a pull request.
+Please file any bugs or questions as [issues](https://github.com/geohazards-tep/dcs-insar-roipac/issues/new) or send in a pull request.
 
 ### <a name="license"></a>License
 
-Copyright 2015 Terradue Srl
+Copyright 2017 Terradue Srl
 
 Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
